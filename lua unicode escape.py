@@ -1,37 +1,49 @@
 import re
 import string
 
-def is_printable(s, threshold=0.9):
-    # Check if string is mostly printable
-    printable = sum(1 for c in s if c in string.printable)
-    return (printable / max(len(s), 1)) >= threshold
+input_file = "input.txt"
+output_file = "output.txt"
 
 def decode_lua_string(s):
+    # Decode octal escape sequences: \ddd
+    def decode_octal(match):
+        val = int(match.group(1))
+        return chr(val) if val < 256 else match.group(0)
+
+    s = re.sub(r'\\d{1,3})', decode_octal, s)
+
+    # Decode hex escape sequences: \xHH
+    s = re.sub(r'\\x([0-9A-Fa-f]{2})', lambda m: chr(int(m.group(1), 16)), s)
+
     try:
         decoded = bytes(s, "utf-8").decode("unicode_escape")
-        if is_printable(decoded):
-            return decoded
-        else:
-            return s  # skip decoding if looks like binary
     except:
-        return s  # skip if decoding fails
+        decoded = s
 
-def decode_strings_in_file(input_file="input.txt", output_file="output.txt"):
-    with open(input_file, "r", encoding="utf-8") as f:
-        content = f.read()
+    # Skip binary-like results
+    printable_ratio = sum(c in string.printable for c in decoded) / max(len(decoded), 1)
+    if printable_ratio < 0.9:
+        return None
 
-    def replacer(match):
-        original = match.group(0)
-        inner = match.group(1)
-        decoded_inner = decode_lua_string(inner)
-        return f'"{decoded_inner}"'
+    return decoded
 
-    pattern = r'"((?:[^"\\]|\\.)*?)"'
-    new_content = re.sub(pattern, replacer, content)
+# Regex to find Lua string literals ("..." and '...')
+string_pattern = re.compile(r'(["\'])(.*?)(?<!\\1', re.DOTALL)
 
-    with open(output_file, "w", encoding="utf-8") as f:
-        f.write(new_content)
+with open(input_file, "r", encoding="utf-8", errors="ignore") as f:
+    content = f.read()
 
-    print("[+] Strings decoded (safe mode). Output saved to:", output_file)
+def replacer(match):
+    quote = match.group(1)
+    original = match.group(2)
+    decoded = decode_lua_string(original)
+    if decoded is None or decoded == original:
+        return match.group(0)
+    return quote + decoded + quote
 
-decode_strings_in_file()
+updated_content = string_pattern.sub(replacer, content)
+
+with open(output_file, "w", encoding="utf-8") as f:
+    f.write(updated_content)
+
+print(f"[+] Decoding complete. Output written to {output_file}")
