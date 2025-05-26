@@ -1,19 +1,29 @@
 import re
 
 def decode_escaped_bytestring(s):
-    if isinstance(s, bytes):
-        s = s.decode("utf-8", errors="replace")
     try:
         return bytes(s, "utf-8").decode("unicode_escape")
     except:
         return s
 
-with open("input.txt", "r", encoding="utf-8", errors="ignore") as f:
-    content = f.read()
+def decode_b_strings_in_file(filename="input.txt", output="output.txt"):
+    with open(filename, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
 
-# Find b'....' or b"...." patterns
-matches = re.findall(r"b[\"'](.*?)[\"']", content)
+    # Replace every b'...' pattern with decoded version
+    def replacer(match):
+        original = match.group(0)  # e.g., b'hi\\r\\nworld'
+        inner = match.group(1)     # e.g., hi\\r\\nworld
+        decoded = decode_escaped_bytestring(inner)
+        return decoded  # Replace entire b'...' with actual decoded text
 
-for i, m in enumerate(matches, 1):
-    decoded = decode_escaped_bytestring(m)
-    print(f"\n--- Decoded Match #{i} ---\n{decoded}")
+    # This pattern targets b'....' (or b"....") safely
+    pattern = re.compile(r"b[\"'](.*?)[\"']")
+    updated = pattern.sub(replacer, content)
+
+    with open(output, "w", encoding="utf-8") as f:
+        f.write(updated)
+
+    print("[+] Finished decoding and replacing b'...' strings in-place.")
+
+decode_b_strings_in_file()
