@@ -1,32 +1,30 @@
 import re
 
 def decode_lua_string(s):
-    # Decode Lua-style escape sequences like \n, \", etc.
-    return bytes(s, "utf-8").decode("unicode_escape")
+    try:
+        return bytes(s, "utf-8").decode("unicode_escape")
+    except:
+        return s  # return original if decoding fails
 
-def extract_and_decode(filename="input.txt"):
-    with open(filename, "r", encoding="utf-8") as f:
+def decode_strings_in_file(input_file="input.txt", output_file="output.txt"):
+    with open(input_file, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Match strings wrapped in quotes (e.g. "something with \" escapes \n")
-    pattern = r'"(.*?\\n.*?|.*?\\\".*?)*?"'  # Matches strings with \n or \"
-    matches = re.findall(pattern, content)
+    # Replace each quoted string with its decoded version
+    def replacer(match):
+        original = match.group(0)  # includes quotes
+        inner = match.group(1)     # just the string content
+        decoded_inner = decode_lua_string(inner)
+        return f'"{decoded_inner}"'
 
-    decoded_strings = []
-    for m in matches:
-        try:
-            decoded = decode_lua_string(m)
-            decoded_strings.append(decoded)
-        except Exception as e:
-            print(f"[!] Failed to decode: {m[:30]}... ({e})")
+    # Matches "anything possibly escaped" including \" and \n
+    pattern = r'"((?:[^"\\]|\\.)*?)"'
+    new_content = re.sub(pattern, replacer, content)
 
-    # Print decoded results
-    for i, s in enumerate(decoded_strings):
-        print(f"\n--- Decoded String #{i + 1} ---\n{s}")
+    # Save the updated file
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(new_content)
 
-    # Optionally save to a file
-    with open("decoded_output.txt", "w", encoding="utf-8") as out:
-        for s in decoded_strings:
-            out.write(s + "\n\n")
+    print("[+] Strings decoded. Output saved to:", output_file)
 
-extract_and_decode()
+decode_strings_in_file()
