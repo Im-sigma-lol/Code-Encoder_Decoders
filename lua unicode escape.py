@@ -28,7 +28,7 @@ def decode_lua_string(s):
     return decoded
 
 # Regex to find Lua string literals ("..." and '...')
-string_pattern = re.compile(r'(["\'])(.*?)(?<!\\1', re.DOTALL)
+string_pattern = re.compile(r'(["\'])(.*?)(?<!\\)\1', re.DOTALL)
 
 with open(input_file, "r", encoding="utf-8", errors="ignore") as f:
     content = f.read()
