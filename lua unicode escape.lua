@@ -24,3 +24,4 @@ end)
 io.open("output.txt", "w"):write(output)
 
 print("[+] Reformatted Body strings into readable form.")
+--if your seeing this im currently crashing out at this time and might break my phone, because im a mobile noob using termux.
