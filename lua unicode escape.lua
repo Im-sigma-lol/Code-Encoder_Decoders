@@ -1,22 +1,38 @@
--- decode.lua
-local input = io.open("input.txt", "r"):read("*a")
+-- decode_lua_strings.lua
 
--- Function to decode all Lua string literals
-local function decode_strings(str)
-    return str:gsub("([\"'])(.-)%1", function(q, content)
-        local try = "return " .. q .. content .. q
-        local ok, result = pcall(load(try))
-        if ok and type(result) == "string" then
-            -- only return if printable
-            local printable = result:gsub("[%c\128-\255]", "")
-            if #printable / #result > 0.9 then
-                return q .. result .. q
-            end
-        end
-        return q .. content .. q -- unchanged
-    end)
+local function is_printable(s)
+  local count = 0
+  for i = 1, #s do
+    local byte = s:byte(i)
+    if byte >= 32 and byte <= 126 or byte == 10 or byte == 13 then
+      count = count + 1
+    end
+  end
+  return count / #s >= 0.9
 end
 
-local output = decode_strings(input)
-io.open("output.txt", "w"):write(output)
-print("[+] Decoded to output.txt")
+local function decode_string(s)
+  local f, err = load("return " .. s)
+  if not f then return s end
+  local ok, result = pcall(f)
+  if not ok or type(result) ~= "string" then return s end
+  if not is_printable(result) then return s end
+  return string.format("%q", result) -- returns it re-escaped and quoted
+end
+
+-- Read full input
+local input = io.open("input.txt", "r"):read("*a")
+
+-- Replace quoted strings
+local output = input:gsub("([\"'])(.-)(%1)", function(q, content, endq)
+  local raw = q .. content .. endq
+  local decoded = decode_string(raw)
+  return decoded or raw
+end)
+
+-- Write to output
+local out = io.open("output.txt", "w")
+out:write(output)
+out:close()
+
+print("[+] Decoded strings written to output.txt")
