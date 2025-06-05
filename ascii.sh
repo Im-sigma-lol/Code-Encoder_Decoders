@@ -1,39 +1,25 @@
-#!/bin/bash
+#!/data/data/com.termux/files/usr/bin/bash
 
-# Function to decode an ASCII-encoded Lua string
+# Function to decode \123\45\67 into actual ASCII characters
 decode_ascii() {
-    local encoded="$1"
-    echo -e "$encoded"
+    echo -e "$1" | sed 's/\\[0-9]\{1,3\}/\\x\1/g' | xargs -0 printf "%b"
 }
 
-# Function to decode and replace in a file
-process_file() {
-    local file="$1"
+# Find all .lua files and process each
+find . -type f -name "*.lua" | while read -r file; do
+    content=$(cat "$file")
 
-    # Use Perl to extract all loadstring("\###...") matches
-    grep -Poz '(?s)loadstring\s*"((\\\d{2,3})+)"\s*' "$file" | while IFS= read -r -d '' match; do
-        encoded=$(echo "$match" | grep -oP '"\K(\\\d{2,3})+(?=")')
-        if [[ -n "$encoded" ]]; then
-            decoded=$(decode_ascii "$encoded")
-            new_loadstring="loadstring(\"$decoded\")"
-            # Escape for sed
-            sed_safe_match=$(printf '%s\n' "$match" | sed -e 's/[\/&]/\\&/g')
-            sed_safe_replacement=$(printf '%s\n' "$new_loadstring" | sed -e 's/[\/&]/\\&/g')
-            # Replace in-place
-            sed -i "s/$sed_safe_match/$sed_safe_replacement/" "$file"
-            echo ">>> Replaced in: $file"
-        fi
-    done
-}
+    # Extract ASCII string between loadstring("...")() or loadstring('...')()
+    encoded=$(echo "$content" | grep -oP 'loadstring["'\'']\0-9\*["'\'']' | grep -oP '\0-9\+')
 
-# Main scan
-scan_directory() {
-    local dir="$1"
-    find "$dir" -type f | while read -r file; do
-        process_file "$file"
-    done
-}
+    if [ -n "$encoded" ]; then
+        # Decode the ASCII sequence
+        decoded=$(decode_ascii "$encoded")
 
-# Entry point
-TARGET_DIR="${1:-.}"  # Use current directory if none given
-scan_directory "$TARGET_DIR"
+        # Replace the file content with decoded Lua
+        echo "$decoded" > "$file"
+        echo "[+] Decrypted: $file"
+    else
+        echo "[ ] Skipped (no encoded string): $file"
+    fi
+done
