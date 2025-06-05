@@ -1,41 +1,45 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# Clean decode: only convert \NNN (where N = 0–9)
+# Decode only valid \NNN sequences (0–255), skip invalids
 decode_ascii() {
-    echo "$1" | perl -CS -pe 's/\[0-9]{1,3})/chr($1)/ge'
+    echo "$1" | perl -CS -pe '
+        s{
+            \[0-9]{1,3})     # Match \NNN
+        }{
+            $1 <= 255 ? chr($1) : "\\$1"
+        }gex'
 }
 
-# Recursively decode all layers
 recursive_decode() {
     local input="$1"
-    local iterations=0
     local new_input
+    local max_depth=20
+    local i=0
 
-    while echo "$input" | grep -q 'loadstring(".*")()'; do
-        encoded=$(echo "$input" | grep -oP 'loadstring"([^"]+)"' | head -n 1 | cut -d'"' -f2)
+    while echo "$input" | grep -q 'loadstring(".*")()' && [ "$i" -lt "$max_depth" ]; do
+        encoded=$(echo "$input" | grep -oP 'loadstring"([^"]+)"' | head -n1 | cut -d'"' -f2)
         new_input=$(decode_ascii "$encoded")
 
-        # Avoid infinite loop
         if [ "$new_input" == "$input" ] || [ -z "$new_input" ]; then
             break
         fi
 
         input="$new_input"
-        iterations=$((iterations + 1))
+        i=$((i + 1))
     done
 
     echo "$input"
 }
 
-# Main decoding loop for all .lua files
+# Process all Lua files
 find . -type f -name "*.lua" | while read -r file; do
-    content=$(cat "$file")
-    result=$(recursive_decode "$content")
+    original=$(cat "$file")
+    result=$(recursive_decode "$original")
 
-    if [ -n "$result" ] && [ "$result" != "$content" ]; then
+    if [ -n "$result" ] && [ "$result" != "$original" ]; then
         echo "$result" > "$file"
-        echo "[+] Decoded: $file"
+        echo "[+] Decoded ($file)"
     else
-        echo "[ ] Skipped: $file (no change)"
+        echo "[ ] Skipped or already decoded: $file"
     fi
 done
