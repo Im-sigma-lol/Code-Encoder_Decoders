@@ -1,40 +1,40 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# Decode one level of ASCII
+# Safe ASCII decode using Perl (handles \NNN reliably)
 decode_ascii() {
-    echo -e "$1" | sed 's/\\[0-9]\{1,3\}/\\x\1/g' | xargs -0 printf "%b"
+    echo "$1" | perl -pe 's/\\d{1,3})/chr($1)/ge'
 }
 
-# Recursively decode until no loadstring("...")() is found
+# Recursive decode loop
 recursive_decode() {
     local input="$1"
-    local decoded
+    local new_input
+    local iterations=0
 
     while echo "$input" | grep -q 'loadstring(".*")()'; do
-        encoded=$(echo "$input" | grep -oP 'loadstring"([^"]+)"' | head -n 1 | cut -d'"' -f2)
-        decoded=$(decode_ascii "$encoded")
+        encoded=$(echo "$input" | grep -oP 'loadstring"([^"]+)"' | head -n1 | cut -d'"' -f2)
+        new_input=$(decode_ascii "$encoded")
 
-        # If decoding fails or doesn't change, break to prevent infinite loop
-        if [ "$decoded" == "$input" ] || [ -z "$decoded" ]; then
+        # Break if decoding stalls or is empty
+        if [ "$new_input" == "$input" ] || [ -z "$new_input" ]; then
             break
         fi
 
-        input="$decoded"
+        input="$new_input"
+        iterations=$((iterations + 1))
     done
 
     echo "$input"
 }
 
-# Process all .lua files recursively
+# Main loop to find and decode .lua files
 find . -type f -name "*.lua" | while read -r file; do
     original=$(cat "$file")
-
-    # Start recursive decoding
     result=$(recursive_decode "$original")
 
     if [ -n "$result" ] && [ "$result" != "$original" ]; then
         echo "$result" > "$file"
-        echo "[+] Fully Decoded: $file"
+        echo "[+] Decoded ($file)"
     else
         echo "[ ] Skipped or already decoded: $file"
     fi
