@@ -1,21 +1,21 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# Safe ASCII decode using Perl (handles \NNN reliably)
+# Clean decode: only convert \NNN (where N = 0–9)
 decode_ascii() {
-    echo "$1" | perl -pe 's/\\d{1,3})/chr($1)/ge'
+    echo "$1" | perl -CS -pe 's/\[0-9]{1,3})/chr($1)/ge'
 }
 
-# Recursive decode loop
+# Recursively decode all layers
 recursive_decode() {
     local input="$1"
-    local new_input
     local iterations=0
+    local new_input
 
     while echo "$input" | grep -q 'loadstring(".*")()'; do
-        encoded=$(echo "$input" | grep -oP 'loadstring"([^"]+)"' | head -n1 | cut -d'"' -f2)
+        encoded=$(echo "$input" | grep -oP 'loadstring"([^"]+)"' | head -n 1 | cut -d'"' -f2)
         new_input=$(decode_ascii "$encoded")
 
-        # Break if decoding stalls or is empty
+        # Avoid infinite loop
         if [ "$new_input" == "$input" ] || [ -z "$new_input" ]; then
             break
         fi
@@ -27,15 +27,15 @@ recursive_decode() {
     echo "$input"
 }
 
-# Main loop to find and decode .lua files
+# Main decoding loop for all .lua files
 find . -type f -name "*.lua" | while read -r file; do
-    original=$(cat "$file")
-    result=$(recursive_decode "$original")
+    content=$(cat "$file")
+    result=$(recursive_decode "$content")
 
-    if [ -n "$result" ] && [ "$result" != "$original" ]; then
+    if [ -n "$result" ] && [ "$result" != "$content" ]; then
         echo "$result" > "$file"
-        echo "[+] Decoded ($file)"
+        echo "[+] Decoded: $file"
     else
-        echo "[ ] Skipped or already decoded: $file"
+        echo "[ ] Skipped: $file (no change)"
     fi
 done
