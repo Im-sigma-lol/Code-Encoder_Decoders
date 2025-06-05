@@ -1,25 +1,30 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# Function to decode ASCII escape sequences like \108\101 into readable text
+# Decode function
 decode_ascii() {
     echo -e "$1" | sed 's/\\[0-9]\{1,3\}/\\x\1/g' | xargs -0 printf "%b"
 }
 
-# Recursively find all .lua files
+# Main loop
 find . -type f -name "*.lua" | while read -r file; do
-    # Try to extract the loadstring line
     raw_line=$(grep -oP 'loadstring"([^"]+)"' "$file")
 
     if [ -n "$raw_line" ]; then
-        # Extract the encoded string inside quotes
-        encoded=$(echo "$raw_line" | cut -d'"' -f2)
+        first=$(echo "$raw_line" | cut -d'"' -f2)
+        decoded1=$(decode_ascii "$first")
 
-        # Decode ASCII
-        decoded=$(decode_ascii "$encoded")
+        # Check if decoded1 contains another loadstring
+        if echo "$decoded1" | grep -q 'loadstring(";'; then
+            second=$(echo "$decoded1" | grep -oP 'loadstring"([^"]+)"' | cut -d'"' -f2)
+            decoded2=$(decode_ascii "$second")
+            final="$decoded2"
+        else
+            final="$decoded1"
+        fi
 
-        if [ -n "$decoded" ]; then
-            echo "$decoded" > "$file"
-            echo "[+] Decrypted: $file"
+        if [ -n "$final" ]; then
+            echo "$final" > "$file"
+            echo "[+] Decrypted (double): $file"
         else
             echo "[!] Failed to decode: $file"
         fi
