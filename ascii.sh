@@ -1,26 +1,29 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# Function to decode \123\45 into characters
+# Function to decode ASCII escape sequences like \108\101 into readable text
 decode_ascii() {
     echo -e "$1" | sed 's/\\[0-9]\{1,3\}/\\x\1/g' | xargs -0 printf "%b"
 }
 
-# Process all .lua files
+# Recursively find all .lua files
 find . -type f -name "*.lua" | while read -r file; do
-    # Extract the line that contains loadstring("...")()
-    target_line=$(grep 'loadstring(".*")()' "$file")
+    # Try to extract the loadstring line
+    raw_line=$(grep -oP 'loadstring"([^"]+)"' "$file")
 
-    if [ -n "$target_line" ]; then
-        # Safely extract between the first pair of quotes
-        encoded=$(echo "$target_line" | cut -d'"' -f2)
+    if [ -n "$raw_line" ]; then
+        # Extract the encoded string inside quotes
+        encoded=$(echo "$raw_line" | cut -d'"' -f2)
 
-        # Decode the ASCII string
+        # Decode ASCII
         decoded=$(decode_ascii "$encoded")
 
-        # Replace the file with decoded result
-        echo "$decoded" > "$file"
-        echo "[+] Decrypted: $file"
+        if [ -n "$decoded" ]; then
+            echo "$decoded" > "$file"
+            echo "[+] Decrypted: $file"
+        else
+            echo "[!] Failed to decode: $file"
+        fi
     else
-        echo "[ ] Skipped: $file (no matching loadstring)"
+        echo "[ ] Skipped (no matching loadstring): $file"
     fi
 done
