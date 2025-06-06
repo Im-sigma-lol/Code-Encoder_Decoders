@@ -1,82 +1,120 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# G-Code mapping (partial — extend as needed)
+# Load emoji table
 declare -A gcode_encode=(
-  ["\n"]="👇" [" "]="👉" ["!"]="⚠️" ['"']="🙌" ["#"]="🤬"
-  ["0"]="💘" ["1"]="🤎" ["2"]="💙" ["3"]="🤍"
-  ["A"]="😀" ["B"]="😃" ["C"]="😄" ["D"]="😁"
-  ["a"]="😋" ["b"]="😛" ["c"]="😝" ["d"]="😜"
+  ["\n"]="👇" [" "]="👉" ["!"]="⚠️" ['"']="🙌" ["#"]="🤬" ["$"]="🤑" ["%"]="🗝️" ["&"]="🫂"
+  ["'"]="👐" ["("]="🌜" [")"]="🌛" ["*"]="✖️" ["+"]="➕" [","]="🐊" ["-"]="➖" ["."]="👆"
+  ["/"]="➗" ["0"]="💘" ["1"]="🤎" ["2"]="💙" ["3"]="🤍" ["4"]="❤️" ["5"]="💚" ["6"]="🧡"
+  ["7"]="💜" ["8"]="💛" ["9"]="🖤" [":"]="↕️️" [";"]="↩️" ["<"]="🌘" ["="]="🌗" [">"]="🌖"
+  ["?"]="❓" ["@"]="🅰️" ["A"]="😀" ["B"]="😃" ["C"]="😄" ["D"]="😁" ["E"]="😆" ["F"]="😅"
+  ["G"]="😂" ["H"]="🤣" ["I"]="😭" ["J"]="😉" ["K"]="😗" ["L"]="😙" ["M"]="😚" ["N"]="😘"
+  ["O"]="🥰" ["P"]="😍" ["Q"]="🤩" ["R"]="🥳" ["S"]="🙃" ["T"]="🙂" ["U"]="🥲" ["V"]="😊"
+  ["W"]="☺️" ["X"]="😌" ["Y"]="😏" ["Z"]="🤤" ["["]="📬" ["\\"]="↘️" ["]"]="📫" ["^"]="🔼"
+  ["_"]="🔜" ["`"]="↖️" ["a"]="😋" ["b"]="😛" ["c"]="😝" ["d"]="😜" ["e"]="🤪" ["f"]="🥴"
+  ["g"]="😔" ["h"]="🥺" ["i"]="😬" ["j"]="😑" ["k"]="😐" ["l"]="😶" ["m"]="🤐" ["n"]="🤔"
+  ["o"]="🤫" ["p"]="🤭" ["q"]="🥱" ["r"]="🤗" ["s"]="😱" ["t"]="🤨" ["u"]="🧐" ["v"]="😒"
+  ["w"]="🙄" ["x"]="😤" ["y"]="😠" ["z"]="😡" ["{"]="📈" ["|"]="🚦" ["}"]="📉" ["~"]="🚫"
 )
 
-# Reverse table for decoding
 declare -A gcode_decode
-for key in "${!gcode_encode[@]}"; do
-  gcode_decode["${gcode_encode[$key]}"]="$key"
+for k in "${!gcode_encode[@]}"; do
+  gcode_decode["${gcode_encode[$k]}"]="$k"
 done
 
-# Function: Encode text
-encode_text() {
+encrypt() {
   local input="$1"
   local output=""
-  local i char encoded
-  for ((i = 0; i < ${#input}; i++)); do
-    char="${input:i:1}"
-    encoded="${gcode_encode[$char]}"
-    output+="${encoded:-$char} "
+  local c
+  for ((i=0; i<${#input}; i++)); do
+    c="${input:i:1}"
+    output+="${gcode_encode[$c]:-$c}"
   done
   echo "$output"
 }
 
-# Function: Decode text
-decode_text() {
+decrypt() {
   local input="$1"
   local output=""
-  local emoji
-  for emoji in $input; do
-    output+="${gcode_decode[$emoji]:-$emoji}"
+  local emoji=""
+  local match=0
+
+  for ((i=0; i<${#input};)); do
+    match=0
+    for val in "${!gcode_decode[@]}"; do
+      if [[ "${input:i:${#val}}" == "$val" ]]; then
+        output+="${gcode_decode[$val]}"
+        ((i+=${#val}))
+        match=1
+        break
+      fi
+    done
+    if [[ $match -eq 0 ]]; then
+      output+="${input:i:1}"
+      ((i++))
+    fi
   done
-  echo -e "$output"
+  echo "$output"
 }
 
-# CLI parser
+show_help() {
+  echo "Usage: $0 -E|-D [-F file] [-DIR path] [-A] [-O] [-N] [-U] [-V]"
+}
+
+# --- Parse Flags ---
 MODE=""
-FILENAME=""
+FILE=""
+DIR=""
+ALL=false
+OVERWRITE=false
+RENAME=false
+FORCE=false
+VERBOSE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    -E) MODE="ENCODE" ;;
-    -D) MODE="DECODE" ;;
-    -F) shift; FILENAME="$1" ;;
-    *) echo "Unknown flag: $1"; exit 1 ;;
+    -E) MODE="ENC" ;;
+    -D) MODE="DEC" ;;
+    -F) FILE="$2"; shift ;;
+    -DIR) DIR="$2"; shift ;;
+    -A) ALL=true ;;
+    -O) OVERWRITE=true ;;
+    -N) RENAME=true ;;
+    -U) FORCE=true ;;
+    -V) VERBOSE=true ;;
+    -h|--help) show_help; exit 0 ;;
+    *) break ;;
   esac
   shift
 done
 
-if [[ "$MODE" == "" ]]; then
-  echo "Enter G-Code text (end with Ctrl+D):"
-  user_input=$(cat)
-  [[ -z "$user_input" ]] && { echo "No input provided."; exit 1; }
-  if [[ "$user_input" == *[😀-🙏💘-🧿]* ]]; then
-    decode_text "$user_input"
+process_file() {
+  local file="$1"
+  [[ $VERBOSE == true ]] && echo "[*] Processing: $file"
+
+  [[ "$MODE" == "ENC" ]] && result=$(encrypt "$(cat "$file")")
+  [[ "$MODE" == "DEC" ]] && result=$(decrypt "$(cat "$file")")
+
+  if $OVERWRITE; then
+    echo "$result" > "$file"
+  elif $RENAME; then
+    ext="${MODE,,}"
+    echo "$result" > "${file}.${ext}"
   else
-    encode_text "$user_input"
+    echo "$result"
   fi
-  exit 0
-fi
+}
 
-# Handle file input if provided
-if [[ -n "$FILENAME" && -f "$FILENAME" ]]; then
-  content=$(cat "$FILENAME")
+if [[ -n "$FILE" ]]; then
+  process_file "$FILE"
+elif [[ -n "$DIR" && $ALL == true ]]; then
+  find "$DIR" -type f | while read -r f; do process_file "$f"; done
+elif [[ -n "$DIR" ]]; then
+  for f in "$DIR"/*; do [[ -f "$f" ]] && process_file "$f"; done
+elif [[ "$MODE" == "ENC" || "$MODE" == "DEC" ]]; then
+  echo -n "Input: "
+  read -r line
+  [[ "$MODE" == "ENC" ]] && encrypt "$line"
+  [[ "$MODE" == "DEC" ]] && decrypt "$line"
 else
-  echo "Enter text (end with Ctrl+D):"
-  content=$(cat)
-fi
-
-if [[ "$MODE" == "ENCODE" ]]; then
-  encode_text "$content"
-elif [[ "$MODE" == "DECODE" ]]; then
-  decode_text "$content"
-else
-  echo "No mode selected."
-  exit 1
+  show_help
 fi
