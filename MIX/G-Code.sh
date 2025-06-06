@@ -23,8 +23,7 @@ done
 
 # --- Functions ---
 encrypt() {
-  local input="$1"
-  local output=""
+  local input="$1" output=""
   for ((i=0; i<${#input}; i++)); do
     c="${input:i:1}"
     output+="${gcode_encode[$c]:-$c}"
@@ -33,9 +32,7 @@ encrypt() {
 }
 
 decrypt() {
-  local input="$1"
-  local output=""
-  local i=0
+  local input="$1" output="" i=0
   while [[ $i -lt ${#input} ]]; do
     match=0
     for emoji in "${!gcode_decode[@]}"; do
@@ -55,14 +52,39 @@ decrypt() {
 }
 
 show_help() {
+  echo "Emoji G-Code Encoder/Decoder"
   echo "Usage: $0 -E|-D [-F file] [-DIR path] [-A] [-O] [-N] [-U] [-V]"
+  echo "Flags:"
+  echo "  -E         Encode (encrypt)"
+  echo "  -D         Decode (decrypt)"
+  echo "  -F <file>  Input file"
+  echo "  -DIR <dir> Process directory"
+  echo "  -A         Process all files recursively"
+  echo "  -O         Overwrite original file"
+  echo "  -N         Save as new file with .enc/.dec extension"
+  echo "  -U         Force mode (reserved)"
+  echo "  -V         Verbose output"
+  echo "  -h         Show help"
 }
 
 process_file() {
   local file="$1"
+  [[ ! -r "$file" ]] && echo "[!] Skipping unreadable file: $file" && return
+
   [[ $VERBOSE == true ]] && echo "[*] Processing: $file"
-  [[ "$MODE" == "ENC" ]] && result=$(encrypt "$(cat "$file")")
-  [[ "$MODE" == "DEC" ]] && result=$(decrypt "$(cat "$file")")
+  local content
+  content=$(<"$file")
+
+  local result
+  if [[ "$MODE" == "ENC" ]]; then
+    result=$(encrypt "$content")
+  elif [[ "$MODE" == "DEC" ]]; then
+    result=$(decrypt "$content")
+  else
+    echo "[!] Unknown mode"
+    return 1
+  fi
+
   if $OVERWRITE; then
     echo "$result" > "$file"
   elif $RENAME; then
@@ -93,10 +115,10 @@ while [[ $# -gt 0 ]]; do
     -A) ALL=true ;;
     -O) OVERWRITE=true ;;
     -N) RENAME=true ;;
-    -U) FORCE=true ;;
+    -U) FORCE=true ;;  # Currently unused
     -V) VERBOSE=true ;;
     -h|--help) show_help; exit 0 ;;
-    *) break ;;
+    *) echo "[!] Unknown argument: $1"; show_help; exit 1 ;;
   esac
   shift
 done
@@ -111,8 +133,11 @@ elif [[ -n "$DIR" ]]; then
 elif [[ "$MODE" == "ENC" || "$MODE" == "DEC" ]]; then
   echo -n "Input: "
   read -r line
-  [[ "$MODE" == "ENC" ]] && encrypt "$line"
-  [[ "$MODE" == "DEC" ]] && decrypt "$line"
+  if [[ "$MODE" == "ENC" ]]; then
+    encrypt "$line"
+  else
+    decrypt "$line"
+  fi
 else
   show_help
 fi
