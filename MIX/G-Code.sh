@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-# Load emoji table
+# --- Emoji G-Code Mappings ---
 declare -A gcode_encode=(
   ["\n"]="👇" [" "]="👉" ["!"]="⚠️" ['"']="🙌" ["#"]="🤬" ["$"]="🤑" ["%"]="🗝️" ["&"]="🫂"
   ["'"]="👐" ["("]="🌜" [")"]="🌛" ["*"]="✖️" ["+"]="➕" [","]="🐊" ["-"]="➖" ["."]="👆"
@@ -21,10 +21,10 @@ for k in "${!gcode_encode[@]}"; do
   gcode_decode["${gcode_encode[$k]}"]="$k"
 done
 
+# --- Functions ---
 encrypt() {
   local input="$1"
   local output=""
-  local c
   for ((i=0; i<${#input}; i++)); do
     c="${input:i:1}"
     output+="${gcode_encode[$c]:-$c}"
@@ -35,21 +35,19 @@ encrypt() {
 decrypt() {
   local input="$1"
   local output=""
-  local emoji=""
-  local match=0
-
-  for ((i=0; i<${#input};)); do
+  local i=0
+  while [[ $i -lt ${#input} ]]; do
     match=0
-    for val in "${!gcode_decode[@]}"; do
-      if [[ "${input:i:${#val}}" == "$val" ]]; then
-        output+="${gcode_decode[$val]}"
-        ((i+=${#val}))
+    for emoji in "${!gcode_decode[@]}"; do
+      if [[ "${input:$i:${#emoji}}" == "$emoji" ]]; then
+        output+="${gcode_decode[$emoji]}"
+        ((i+=${#emoji}))
         match=1
         break
       fi
     done
     if [[ $match -eq 0 ]]; then
-      output+="${input:i:1}"
+      output+="${input:$i:1}"
       ((i++))
     fi
   done
@@ -60,7 +58,22 @@ show_help() {
   echo "Usage: $0 -E|-D [-F file] [-DIR path] [-A] [-O] [-N] [-U] [-V]"
 }
 
-# --- Parse Flags ---
+process_file() {
+  local file="$1"
+  [[ $VERBOSE == true ]] && echo "[*] Processing: $file"
+  [[ "$MODE" == "ENC" ]] && result=$(encrypt "$(cat "$file")")
+  [[ "$MODE" == "DEC" ]] && result=$(decrypt "$(cat "$file")")
+  if $OVERWRITE; then
+    echo "$result" > "$file"
+  elif $RENAME; then
+    ext="${MODE,,}"
+    echo "$result" > "${file}.${ext}"
+  else
+    echo "$result"
+  fi
+}
+
+# --- Default values ---
 MODE=""
 FILE=""
 DIR=""
@@ -70,6 +83,7 @@ RENAME=false
 FORCE=false
 VERBOSE=false
 
+# --- Flag parser ---
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -E) MODE="ENC" ;;
@@ -87,23 +101,7 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-process_file() {
-  local file="$1"
-  [[ $VERBOSE == true ]] && echo "[*] Processing: $file"
-
-  [[ "$MODE" == "ENC" ]] && result=$(encrypt "$(cat "$file")")
-  [[ "$MODE" == "DEC" ]] && result=$(decrypt "$(cat "$file")")
-
-  if $OVERWRITE; then
-    echo "$result" > "$file"
-  elif $RENAME; then
-    ext="${MODE,,}"
-    echo "$result" > "${file}.${ext}"
-  else
-    echo "$result"
-  fi
-}
-
+# --- Action selector ---
 if [[ -n "$FILE" ]]; then
   process_file "$FILE"
 elif [[ -n "$DIR" && $ALL == true ]]; then
