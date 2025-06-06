@@ -1,96 +1,82 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
-LUA_DECODER=$(cat <<'EOF'
-Symbols = {
-  ["G-Code"] = {
-    ["👇"] = "\n", ["👉"] = " ", ["⚠️"] = "!", ["🙌"] = '"', ["🤬"] = "#", ["🤑"] = "$", ["🗝️"] = "%",
-    ["🫂"] = "&", ["👐"] = "'", ["🌜"] = "(", ["🌛"] = ")", ["✖️"] = "*", ["➕"] = "+", ["🐊"] = ",",
-    ["➖"] = "-", ["👆"] = ".", ["➗"] = "/", ["💘"] = "0", ["🤎"] = "1", ["💙"] = "2", ["🤍"] = "3",
-    ["❤️"] = "4", ["💚"] = "5", ["🧡"] = "6", ["💜"] = "7", ["💛"] = "8", ["🖤"] = "9", ["↕️️"] = ":",
-    ["↩️"] = ";", ["🌘"] = "<", ["🌗"] = "=", ["🌖"] = ">", ["❓"] = "?", ["🅰️"] = "@",
-    ["😀"]="A",["😃"]="B",["😄"]="C",["😁"]="D",["😆"]="E",["😅"]="F",["😂"]="G",["🤣"]="H",
-    ["😭"]="I",["😉"]="J",["😗"]="K",["😙"]="L",["😚"]="M",["😘"]="N",["🥰"]="O",["😍"]="P",
-    ["🤩"]="Q",["🥳"]="R",["🙃"]="S",["🙂"]="T",["🥲"]="U",["😊"]="V",["☺️"]="W",["😌"]="X",
-    ["😏"]="Y",["🤤"]="Z",
-    ["📬"]="[",["↘️"]="\\",["📫"]="]",["🔼"]="^",["🔜"]="_",["↖️"]="`",
-    ["😋"]="a",["😛"]="b",["😝"]="c",["😜"]="d",["🤪"]="e",["🥴"]="f",["😔"]="g",["🥺"]="h",
-    ["😬"]="i",["😑"]="j",["😐"]="k",["😶"]="l",["🤐"]="m",["🤔"]="n",["🤫"]="o",["🤭"]="p",
-    ["🥱"]="q",["🤗"]="r",["😱"]="s",["🤨"]="t",["🧐"]="u",["😒"]="v",["🙄"]="w",["😤"]="x",
-    ["😠"]="y",["😡"]="z",["📈"]="{",["🚦"]="|",["📉"]="}",["🚫"]="~"
-  }
-}
-
-msg = ...
-output = ""
-for symbol in msg:gmatch("[\194-\244][\128-\191]*[\128-\191]*") do
-  for k,v in pairs(Symbols["G-Code"]) do
-    if k == symbol then output = output .. v break end
-  end
-end
-print(output)
-EOF
+# G-Code mapping (partial — extend as needed)
+declare -A gcode_encode=(
+  ["\n"]="👇" [" "]="👉" ["!"]="⚠️" ['"']="🙌" ["#"]="🤬"
+  ["0"]="💘" ["1"]="🤎" ["2"]="💙" ["3"]="🤍"
+  ["A"]="😀" ["B"]="😃" ["C"]="😄" ["D"]="😁"
+  ["a"]="😋" ["b"]="😛" ["c"]="😝" ["d"]="😜"
 )
 
-LUA_ENCODER=$(cat <<'EOF'
-Symbols = {
-  ["G-Code"] = {
-    ["\n"] = "👇", [" "] = "👉", ["!"] = "⚠️", ['"'] = "🙌", ["#"] = "🤬", ["$"] = "🤑", ["%"] = "🗝️",
-    ["&"] = "🫂", ["'"] = "👐", ["("] = "🌜", [")"] = "🌛", ["*"] = "✖️", ["+"] = "➕", [","] = "🐊",
-    ["-"] = "➖", ["."] = "👆", ["/"] = "➗", ["0"] = "💘", ["1"] = "🤎", ["2"] = "💙", ["3"] = "🤍",
-    ["4"] = "❤️", ["5"] = "💚", ["6"] = "🧡", ["7"] = "💜", ["8"] = "💛", ["9"] = "🖤", [":"] = "↕️️",
-    [";"] = "↩️", ["<"] = "🌘", ["="] = "🌗", [">"] = "🌖", ["?"] = "❓", ["@"] = "🅰️",
-    ["A"]="😀",["B"]="😃",["C"]="😄",["D"]="😁",["E"]="😆",["F"]="😅",["G"]="😂",["H"]="🤣",
-    ["I"]="😭",["J"]="😉",["K"]="😗",["L"]="😙",["M"]="😚",["N"]="😘",["O"]="🥰",["P"]="😍",
-    ["Q"]="🤩",["R"]="🥳",["S"]="🙃",["T"]="🙂",["U"]="🥲",["V"]="😊",["W"]="☺️",["X"]="😌",
-    ["Y"]="😏",["Z"]="🤤",
-    ["["]="📬",["\\"]="↘️",["]"]="📫",["^"]="🔼",["_"]="🔜",["`"]="↖️",
-    ["a"]="😋",["b"]="😛",["c"]="😝",["d"]="😜",["e"]="🤪",["f"]="🥴",["g"]="😔",["h"]="🥺",
-    ["i"]="😬",["j"]="😑",["k"]="😐",["l"]="😶",["m"]="🤐",["n"]="🤔",["o"]="🤫",["p"]="🤭",
-    ["q"]="🥱",["r"]="🤗",["s"]="😱",["t"]="🤨",["u"]="🧐",["v"]="😒",["w"]="🙄",["x"]="😤",
-    ["y"]="😠",["z"]="😡",["{"]="📈",["|"]="🚦",["}"]="📉",["~"]="🚫"
-  }
-}
+# Reverse table for decoding
+declare -A gcode_decode
+for key in "${!gcode_encode[@]}"; do
+  gcode_decode["${gcode_encode[$key]}"]="$key"
+done
 
-msg = ...
-output = ""
-for i=1,#msg do
-  c = msg:sub(i,i)
-  output = output .. (Symbols["G-Code"][c] or "")
-end
-print(output)
-EOF
-)
-
-function encode_text() {
-  lua -e "$LUA_ENCODER" "$1"
-}
-
-function decode_text() {
-  lua -e "$LUA_DECODER" "$1"
-}
-
-# === MAIN SCRIPT STARTS ===
-
-if [[ "$1" == "-E" ]]; then
-  content=$(cat "$2")
-  encode_text "$content"
-elif [[ "$1" == "-D" && "$2" == "-F" ]]; then
-  content=$(cat "$3")
-  decode_text "$content"
-elif [[ "$1" == "-D" && "$2" == "-dir" ]]; then
-  for f in "$3"/*; do
-    [ -f "$f" ] && decode_text "$(cat "$f")"
+# Function: Encode text
+encode_text() {
+  local input="$1"
+  local output=""
+  local i char encoded
+  for ((i = 0; i < ${#input}; i++)); do
+    char="${input:i:1}"
+    encoded="${gcode_encode[$char]}"
+    output+="${encoded:-$char} "
   done
-elif [[ "$1" == "-D" && "$2" == "-A" ]]; then
-  find . -type f -exec sh -c 'decode_text "$(cat "$1")"' _ {} \;
-else
-  echo "[?] Do you want to (E)ncode or (D)ecode?"
-  read -r mode
-  echo "[?] Enter the text:"
-  read -r text
-  if [[ "$mode" == "E" || "$mode" == "e" ]]; then
-    encode_text "$text"
+  echo "$output"
+}
+
+# Function: Decode text
+decode_text() {
+  local input="$1"
+  local output=""
+  local emoji
+  for emoji in $input; do
+    output+="${gcode_decode[$emoji]:-$emoji}"
+  done
+  echo -e "$output"
+}
+
+# CLI parser
+MODE=""
+FILENAME=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -E) MODE="ENCODE" ;;
+    -D) MODE="DECODE" ;;
+    -F) shift; FILENAME="$1" ;;
+    *) echo "Unknown flag: $1"; exit 1 ;;
+  esac
+  shift
+done
+
+if [[ "$MODE" == "" ]]; then
+  echo "Enter G-Code text (end with Ctrl+D):"
+  user_input=$(cat)
+  [[ -z "$user_input" ]] && { echo "No input provided."; exit 1; }
+  if [[ "$user_input" == *[😀-🙏💘-🧿]* ]]; then
+    decode_text "$user_input"
   else
-    decode_text "$text"
+    encode_text "$user_input"
   fi
+  exit 0
+fi
+
+# Handle file input if provided
+if [[ -n "$FILENAME" && -f "$FILENAME" ]]; then
+  content=$(cat "$FILENAME")
+else
+  echo "Enter text (end with Ctrl+D):"
+  content=$(cat)
+fi
+
+if [[ "$MODE" == "ENCODE" ]]; then
+  encode_text "$content"
+elif [[ "$MODE" == "DECODE" ]]; then
+  decode_text "$content"
+else
+  echo "No mode selected."
+  exit 1
 fi
